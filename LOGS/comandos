@@ -1,0 +1,24 @@
+// preparar eth0
+ifconfig eth0 up
+
+ifconfig
+ifconfig eth0 172.16.60.254/24
+
+//ligar ao switch
+gtkterm (premir enter para confirmar que se estÃ¡ no switch)
+
+//permitir ip forward
+ echo 1 > /proc/sys/net/ipv4/ip_forward
+
+//criar vlan no switch
+configure terminal
+vlan 60
+end
+
+//adicionar porta Ã  vlan
+configure terminal
+interface fastethernet 0/*porta*
+switchport mode access
+switchport access vlan 60
+end
+
