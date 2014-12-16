@@ -4,8 +4,11 @@ CFLAGS=-c
 
 all: ftp
 
-ftp: ftp.o ftp_data.o
-	$(CC) ftp.o ftp_data.o
+ftp: main.o ftp_data.o
+	$(CC) main.o ftp_data.o
+
+main.o:
+	$(CC) $(CFLAGS) main.c
 
 ftp_data.o: ftp_data.c ftp_data.h
 	$(CC) $(FLAGS) ftp_data.c
