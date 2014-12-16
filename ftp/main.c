@@ -13,11 +13,9 @@
 #include "ftp_data.h"
 
 
-int parseArgs(char *argv[]){
+int parseArgs(char *argv[], (struct FTP_Data *) ftp_data){
 
 	unsigned int i = 4;
-
-	FTP_Data ftp_data;
 
 	char *ftp;
 	char *user = NULL;
@@ -84,14 +82,14 @@ int parseArgs(char *argv[]){
 @return 0 if success, exits the program if error (-
  == 0*/
 
-int parseArgv(int argc, char *argv[]){
+int parseArgv(int argc, char *argv[], (struct FTP_Data *) ftp_data){
 
 	if( argc != 2){
 		printf("ftp://[<user>:<password>@]<host>/<url-path>\n");
 		exit(-1);
 	}
 
-	parseArgs(argv);
+	parseArgs(argv, ftp_data);
 
 	return 0;
 }
@@ -150,8 +148,10 @@ int main(int argc, char *argv[]){
 
 	int sockfd;
 	struct hostent *h;
-	
-	parseArgv(argc, argv);
+	FTP_Data ftp_data;
+
+
+	parseArgv(argc, argv, &ftp_data);
 
 	getIP(h, argv[1]);
 
