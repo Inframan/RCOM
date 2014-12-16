@@ -102,7 +102,7 @@ int parseArgv(int argc, char *argv[], (struct FTP_Data *) ftp_data){
 
 void getIP((struct hostent *) h, char *hostname){
 
-	if ((h=gethostbyname(hostname) == NULL) {  
+	if ( ( h = gethostbyname(hostname) == NULL ) ) {  
 		herror("gethostbyname");
 		exit(1);
 	}
@@ -118,24 +118,23 @@ void getIP((struct hostent *) h, char *hostname){
 @return 0 if success, exits the program if error (-1)
 */
 
-int asocket(int *sockfd){
+int asocket(int *sockfd, char *address, int port){
 
-	int	sockfd;
 	struct sockaddr_in server_addr;
 	
 	/*server address handling*/
 	bzero( (char*) &server_addr, sizeof(server_addr) );
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr = inet_addr(SERVER_ADDR);	/*32 bit Internet address network byte ordered*/
-	server_addr.sin_port = htons(SERVER_PORT);		/*server TCP port must be network byte ordered */
+	server_addr.sin_addr.s_addr = inet_addr(adress);	/*32 bit Internet address network byte ordered*/
+	server_addr.sin_port = htons(port);		/*server TCP port must be network byte ordered */
     
 	/*open an TCP socket*/
-	if ( (sockfd = socket(AF_INET,SOCK_STREAM,0)) < 0 ) {
+	if ( (*sockfd = socket(AF_INET,SOCK_STREAM,0)) < 0 ) {
 		perror("socket()");
 		exit(-1);
 	}
 	/*connect to the server*/
-    if( connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0 ){
+    if( connect(*sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0 ){
 		perror("connect()");
 		exit(-1);
 	}

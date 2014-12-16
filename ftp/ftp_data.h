@@ -6,9 +6,9 @@
 @host - hostname
 @url_path - url path
 */
-typedef struct FTP_Data{
+typedef struct{
 	char *user = NULL;
 	char *password = NULL;
 	char *host;
 	char *url_path;
-}
+} FTP_Data;

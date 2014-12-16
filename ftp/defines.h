@@ -1,1 +1,4 @@
 #define MAX_SIZE 255
+
+#define SERVER_PORT 6000
+#define SERVER_ADDR "192.168.28.96"
