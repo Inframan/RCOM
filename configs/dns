@@ -1,0 +1,4 @@
+
+gedit /etc/resolv.conf
+search netlab.fe.up.pt
+nameserver 8.8.8.8

@@ -101,7 +101,7 @@ void listenTo( int sockfd, char *str ){
 	if( recv( sockfd, str, MAX_SIZE, 0 ) < 0 )
 		perror( "[ERROR]: Socket problem (receiving...) " );
 
-	printf( "LISTENING_TO_STRING ||||| %s", str );
+	printf( "LISTENING_TO_STRING ||||||| %s", str );
 }
 
 /**
@@ -135,7 +135,6 @@ int sendTo( int sockfd, char *str, char *code_str, char *value ){
 *************************************************************************************/
 
 
-
 FTP_Data createURL(char* input) {
 	FTP_Data result;
 	if (input == NULL) {
@@ -143,6 +142,7 @@ FTP_Data createURL(char* input) {
 		exit(-1);
 	}
 
+	/
 	if (strncmp(input, "ftp://", 6) == 0) {
 		
 	} else {
@@ -152,7 +152,10 @@ FTP_Data createURL(char* input) {
 
 	result.user = "anonymous";
 	result.password = "anonymous@anonymous.com";
+
+	
 	result.port = 21;
+
 
 	int colon_pos, at_pos = -1, slash_pos, final_slash_pos, tmp_final;
 	colon_pos = find( input, ':', 6 );
@@ -176,13 +179,12 @@ FTP_Data createURL(char* input) {
 		}
 	}
 	
-	
+	//Get the host.
 	if( at_pos == -1 )
 		at_pos = 5;
 	if( colon_pos == -1 )
 		colon_pos = slash_pos;
 	result.host = str_copy( input, at_pos+1, colon_pos );
-	
 	
 	final_slash_pos = slash_pos+1;
 	tmp_final = find( input, '/', final_slash_pos );
@@ -195,11 +197,8 @@ FTP_Data createURL(char* input) {
 		final_slash_pos--;
 	result.filename = str_copy( input, final_slash_pos+1, strlen(input) );
 
-
-
 	return result;
 }
-
 
 int get_port( char *buffer ){
 	
@@ -209,7 +208,7 @@ int get_port( char *buffer ){
 		port_pos3;
 	char *port_str1,
 		 *port_str2;
-
+	
 	port_pos1 = find_nth( buffer, ',', 0, 4 );
 	port_pos2 = find( buffer, ',', port_pos1+1 );
 	port_pos3 = find( buffer, ')', port_pos2+1 );
@@ -222,21 +221,18 @@ int get_port( char *buffer ){
 	return port;
 }
 
-
-
 void full_message( int sockfd, char* buffer, char *str1, char *str2 ){
 	sendTo( sockfd, buffer, str1, str2 );
 	listenTo( sockfd, buffer );
 	usleep( DEFAULT_USLEEP );
 }
 
+
 int has_code( char *str, char *code_str ){
 	int len = strlen( code_str ),
 		i,
 		pos = 0;
-	
 	do{
-		
 		if( pos != -1 ){
 			
 			if( pos != 0 ){
@@ -269,12 +265,11 @@ void wait_for_code( int sockfd, char *buffer, char *code_str ){
 
 
 int main(int argc, char** argv) {
-	
-	printf("-------------FTP INIT--------------\n");
 
+	printf("-----------------INIT-----------------");	
+	
 	checkArgc(argc);
 
-	
 	FTP_Data url = createURL( argv[1] );
 
 	char buffer[ MAX_SIZE+1 ];
@@ -282,6 +277,7 @@ int main(int argc, char** argv) {
 	int sockfd = asocket( destIp, url.port );
 
 	buffer[MAX_SIZE] = '\0';
+
 	wait_for_code( sockfd, buffer, CODE_USER );
 
 	sendTo( sockfd, buffer, "USER ", url.user );
@@ -296,16 +292,21 @@ int main(int argc, char** argv) {
 	}
 
 	sendTo( sockfd, buffer, "PASV", "" );
+	
 	wait_for_code( sockfd, buffer, CODE_PASV );
 	int retr_port = get_port( buffer );
 
 	sendTo( sockfd, buffer, "SIZE ", url.filename );
 	wait_for_code( sockfd, buffer, CODE_SIZE );
 	unsigned int fileSize = atoi( &buffer[4] );
+
+	
 	sendTo( sockfd, buffer, "RETR ", url.filename );
 
+	
 	usleep( DEFAULT_USLEEP );
 
+	
 	if( !fork() ){ 
 		sockfd = asocket( destIp, retr_port );
 		
@@ -315,10 +316,8 @@ int main(int argc, char** argv) {
 		int current_chunk = MAX_SIZE;
 		
 		while( fileSize > 0 ){
-
 			if( fileSize < MAX_SIZE )
 				current_chunk = fileSize;
-
 			bzero( fbuffer, MAX_SIZE );
 			if( recv( sockfd, fbuffer, MAX_SIZE, 0 ) < 0 ){
 				perror("Error while receiving socket:");
@@ -328,13 +327,11 @@ int main(int argc, char** argv) {
 			fileSize -= current_chunk;
 			usleep( FBUFFER_USLEEP );
 		}
-
 		fclose( file );
 	} else {
-
 		wait_for_code( sockfd, buffer, CODE_QUIT );
 		sendTo( sockfd, buffer, "QUIT", "" );
-		printf("-----------------EXITING FTP------------------\n");
+		printf("-----------------ENDING-----------------\n");
 	}
 
 	close( sockfd );
