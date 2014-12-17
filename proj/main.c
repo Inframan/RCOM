@@ -19,6 +19,7 @@
 @param argc - number of parameters
 @return Returns 0 if success
 */
+
 int checkArgc(int argc){
 	if (argc != 2) {
 		printf("Program: ./download ftp://[<user>:<password>@]<host>[:port]/<url-path>\n");
@@ -33,10 +34,10 @@ int checkArgc(int argc){
 @return Returns the IP address if succeeded
 */
 
-char* getIP(char* hostname) {
+char* getIP(char *hostname) {
 	struct hostent *h;
 
-	if ( ( h = gethostbyname(hostname) ) == NULL ) {
+	if ((h = gethostbyname(hostname)) == NULL) {
 		herror("gethostbyname");
 		exit(-1);
 	}
@@ -51,7 +52,7 @@ char* getIP(char* hostname) {
 }
 
 /**	
-@brief Tries to assign the socket file descriptor	
+@brief Tries to assign the socket file descriptor (asocket -> assign socket)
 @param ip - IP address that comes from getIP function
 @param port - port that comes from parsing
 @return sockfd if success
@@ -67,20 +68,20 @@ int asocket(char *ip, int port){
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(port);                /*server TCP port must be network byte ordered */
 
-	if ( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ){
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
 		printf("[ERROR]: Socket could not be created");
 		exit(-1);
 	}
 	
-	if( inet_aton(ip, &address) == 0 ) {
-		printf( "[ERROR]: Failure getting an IP" );
+	if(inet_aton(ip, &address) == 0) {
+		printf("[ERROR]: Failure getting an IP");
 		exit(-1);
 	}
 
 	server_addr.sin_addr.s_addr = address.s_addr;
 	
 	//Connect to the server.
-	if( connect( sockfd, (struct sockaddr*) &server_addr, sizeof (server_addr) ) != 0 ){
+	if(connect(sockfd, (struct sockaddr*) &server_addr, sizeof (server_addr)) != 0){
 		printf("[ERROR]: Failure connecting to hport");
 		exit(-1);
 	}
@@ -92,16 +93,19 @@ int asocket(char *ip, int port){
 @brief Listens to any message that comes from server
 @param sockfd - socket file descriptor
 @param str - string to get read message
+@return Returns 0 if success
 */
 
-void listenTo( int sockfd, char *str ){
+int listenTo(int sockfd, char *str){
 
-	bzero( str, MAX_SIZE );
+	bzero(str, MAX_SIZE);
 
-	if( recv( sockfd, str, MAX_SIZE, 0 ) < 0 )
-		perror( "[ERROR]: Socket problem (receiving...) " );
+	if(recv(sockfd, str, MAX_SIZE, 0) < 0)
+		printf("[ERROR]: Socket problem (receiving...) ");
 
-	printf( "LISTENING_TO_STRING ||||| %s", str );
+	printf("String listened: %s\n", str);
+
+	return OK;
 }
 
 /**
@@ -113,19 +117,105 @@ void listenTo( int sockfd, char *str ){
 @return Returns 0 if success
 */
 
-int sendTo( int sockfd, char *str, char *code_str, char *value ){
+int sendTo(int sockfd, char *str, char *code_str, char *value){
 
-	bzero( str, MAX_SIZE );
+	bzero(str, MAX_SIZE);
 
 	strcpy(str, code_str);
 	strcat(str, value);
 	strcat(str, "\n");
 	
 	if(send(sockfd, str, strlen(str), 0) < 0)
-		perror("[ERROR]: Socket problem (sending...): ");
+		printf("[ERROR]: Socket problem (sending...): ");
 
+	return OK;
+}
+
+/**
+@brief Checks if the message has the expected code
+@param str - string received (message)
+@param code_str - expected code
+@return Returns 1 if success (code exists) and 0 otherwise
+*/
+
+int testResponse(char *str, char *code_str){
+	int i, str_pos = 0;
+	int length = strlen( code_str ), position = 0;	
+
+	for(; str_pos != -1;){
+
+		if(str_pos != -1){
+			if(str_pos != 0) str_pos++;
+			
+			for(i = 0; i < length; i++)
+				if(str[str_pos + i] != code_str[i])
+					break;
+
+			if(length == i) return 1;
+		}
+		str_pos = find(str, '\n', str_pos + 1);
+	}
+	
 	return 0;
 }
+
+/**
+@brief Awaits the response from server with an expected code
+@param sockfd - socket file descriptor
+@param str - string received (from listenTo)
+@param code_str - expected code
+@return Returns 0 when succeeds
+*/
+
+int receiveFrom(int sockfd, char *str, char *code_str){
+
+	for(; !testResponse(str, code_str);)
+		listenTo(sockfd, str);	
+
+	return OK;
+}
+
+/**
+@brief Logins the user (anonymous or not) to the server
+@param sockfd - socket file descriptor
+@param str - string received
+@param data - data retrieved from parser
+@return Returns 0 if success
+*/
+
+int login(int sockfd, char *str, FTP_Data data){
+
+	receiveFrom( sockfd, str, CODE_USER );
+	sendTo( sockfd, str, STR_USER, data.user );
+
+	receiveFrom( sockfd, str, CODE_PASSWORD );
+	sendTo( sockfd, str, STR_PASSWORD, data.password );
+
+	receiveFrom( sockfd, str, CODE_USER_LOGGED );
+
+	return OK;
+
+}
+
+
+/**
+@brief Receives the QUIT command to end connection and sends the response
+@param sockfd - socket file descriptor
+@param str - string received
+@return Returns 0 if success
+*/
+
+int quit(int sockfd, char *str){
+	
+	receiveFrom( sockfd, str, CODE_QUIT );
+	sendTo( sockfd, str, STR_QUIT, BLANK );
+	
+	printf("QUIT\n");	
+
+	return OK;
+
+}
+
 
 /*************************************************************************************
 
@@ -223,91 +313,38 @@ int get_port( char *buffer ){
 }
 
 
-
-void full_message( int sockfd, char* buffer, char *str1, char *str2 ){
-	sendTo( sockfd, buffer, str1, str2 );
-	listenTo( sockfd, buffer );
-	usleep( DEFAULT_USLEEP );
-}
-
-int has_code( char *str, char *code_str ){
-	int len = strlen( code_str ),
-		i,
-		pos = 0;
-	
-	do{
-		
-		if( pos != -1 ){
-			
-			if( pos != 0 ){
-				pos++;
-			}
-			
-			for( i=0; i<len; i++ ){
-				if( str[ pos+i ] != code_str[i] ){
-					break;
-				}
-			}
-			
-			if( i==len ){
-				return 1;
-			}
-			
-		}
-		pos = find( str, '\n', pos+1 );
-	} while( pos != -1 );
-	
-	return 0;
-}
-
-
-void wait_for_code( int sockfd, char *buffer, char *code_str ){
-	do{
-		listenTo( sockfd, buffer );
-	} while( !has_code( buffer, code_str ) );
-}
-
-
-int main(int argc, char** argv) {
+int main(int argc, char *argv[]) {
 	
 	printf("-------------FTP INIT--------------\n");
 
 	checkArgc(argc);
-
 	
 	FTP_Data url = createURL( argv[1] );
 
-	char buffer[ MAX_SIZE+1 ];
-	char * destIp = getIP( url.host );
-	int sockfd = asocket( destIp, url.port );
+	char *str = malloc(MAX_SIZE + 1);
+	char *ip = getIP( url.host );
+	int sockfd = asocket( ip, url.port );
 
-	buffer[MAX_SIZE] = '\0';
-	wait_for_code( sockfd, buffer, CODE_USER );
+	login(sockfd, str, url);
 
-	sendTo( sockfd, buffer, "USER ", url.user );
-
-	wait_for_code( sockfd, buffer, CODE_PASSWORD );
-	sendTo( sockfd, buffer, "PASS ", url.password );
-
-	wait_for_code( sockfd, buffer, CODE_USER_LOGGED );
-	if ( strcmp( url.url_path, "" ) != 0 ){
-		sendTo( sockfd, buffer, "CWD ", url.url_path );
-		wait_for_code( sockfd, buffer, CODE_CWD );
+	if ( strcmp( url.url_path, BLANK ) != 0 ){
+		sendTo( sockfd, str, STR_CWD, url.url_path );
+		receiveFrom( sockfd, str, CODE_CWD );
 	}
 
-	sendTo( sockfd, buffer, "PASV", "" );
-	wait_for_code( sockfd, buffer, CODE_PASV );
-	int retr_port = get_port( buffer );
+	sendTo( sockfd, str, STR_PASV, BLANK );
+	receiveFrom( sockfd, str, CODE_PASV );
+	int retr_port = get_port( str );
 
-	sendTo( sockfd, buffer, "SIZE ", url.filename );
-	wait_for_code( sockfd, buffer, CODE_SIZE );
-	unsigned int fileSize = atoi( &buffer[4] );
-	sendTo( sockfd, buffer, "RETR ", url.filename );
+	sendTo( sockfd, str, STR_SIZE, url.filename );
+	receiveFrom( sockfd, str, CODE_SIZE );
+	unsigned int fileSize = atoi( &str[4] );
+	sendTo( sockfd, str, STR_RETR, url.filename );
 
 	usleep( DEFAULT_USLEEP );
 
 	if( !fork() ){ 
-		sockfd = asocket( destIp, retr_port );
+		sockfd = asocket( ip, retr_port );
 		
 		FILE *file = fopen( url.filename, "wb" );
 		unsigned char* fbuffer[ MAX_SIZE+1 ];
@@ -321,7 +358,7 @@ int main(int argc, char** argv) {
 
 			bzero( fbuffer, MAX_SIZE );
 			if( recv( sockfd, fbuffer, MAX_SIZE, 0 ) < 0 ){
-				perror("Error while receiving socket:");
+				printf("Error while receiving socket:");
 			}
 
 			fwrite( fbuffer, sizeof(char), current_chunk, file );
@@ -330,13 +367,10 @@ int main(int argc, char** argv) {
 		}
 
 		fclose( file );
-	} else {
+	} else 
+		quit(sockfd, str);
 
-		wait_for_code( sockfd, buffer, CODE_QUIT );
-		sendTo( sockfd, buffer, "QUIT", "" );
-		printf("-----------------EXITING FTP------------------\n");
-	}
+	close(sockfd);
 
-	close( sockfd );
 	return 0;
 }
