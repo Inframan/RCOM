@@ -1,0 +1,3 @@
+access-list permite x.x.x.x 0.0.0.7
+só deixa os primeiros 7 endereços acederem à net
+ou seja, como o 4 tem endereço 254/153 nas nets, o 1 não consegue aceder porque tem de aceder aq partir do 4
