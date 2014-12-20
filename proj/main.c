@@ -15,17 +15,59 @@
 #include "ftp_data.h"
 
 /**
-@brief Checks if the only argument that exists is the FTP request
-@param argc - number of parameters
-@return Returns 0 if success
+@brief Tests if there is an error code (http://en.wikipedia.org/wiki/List_of_FTP_server_return_codes) in the message
+@note Only some errors were taken into consideration, since there are a lot of them
+@param message - message string
+@return Returns OK (0) if success
 */
 
-int checkArgc(int argc){
+int ftp_valid(char *message){
+
+	if(strstr(message, FTP_CODE_NO_FILE) != NULL)
+		exit(ABORT);
+	else if(strstr(message, FTP_CODE_WRONG_CREDENTIALS) != NULL)
+		exit(ABORT);
+	else
+		return OK;
+
+}
+
+/**
+@brief Tests if it could receive anything
+@param sockfd - socket file descriptor
+@param str - buffer string
+@return Returns OK (0) if success
+*/
+
+int test_receive(int sockfd, char *str){
+
+	if(recv(sockfd, str, MAX_SIZE, ZERO) < ZERO){
+		printf("[ERROR]: %s", strerror(errno));
+		return !OK;
+	}
+
+	return OK;
+
+}
+
+/**
+@brief Checks if the only argument that exists is the FTP request
+@param argc - number of parameters
+@param argv - parameters value
+@return Returns OK (0) if success
+*/
+
+int test_args(int argc, char *argv[]){
+
 	if (argc != 2) {
 		printf("Program: ./download ftp://[<user>:<password>@]<host>[:port]/<url-path>\n");
-		exit(-1);
+		exit(ABORT);
+	} else if(argv[1] == NULL){
+		printf("[ERROR]: Nothing was indicated");
+		exit(ABORT);
 	}
-	return 0;
+
+	return OK;
 }
 
 /**
@@ -35,18 +77,19 @@ int checkArgc(int argc){
 */
 
 char* getIP(char *hostname) {
+
 	struct hostent *h;
 
 	if ((h = gethostbyname(hostname)) == NULL) {
 		herror("gethostbyname");
-		exit(-1);
+		exit(ABORT);
 	}
 
 	printf("Hostname: %s\n", h->h_name);
 
 	char *ip = inet_ntoa(*((struct in_addr *)h->h_addr));
 
-	printf("IP Address : %s\n", inet_ntoa(*((struct in_addr *)h->h_addr)));
+	printf("\nIP Address : %s\n\n", inet_ntoa(*((struct in_addr *)h->h_addr)));
 	
 	return ip;
 }
@@ -68,22 +111,21 @@ int asocket(char *ip, int port){
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(port);                /*server TCP port must be network byte ordered */
 
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, ZERO)) < ZERO){
 		printf("[ERROR]: Socket could not be created");
-		exit(-1);
+		exit(ABORT);
 	}
 	
-	if(inet_aton(ip, &address) == 0) {
+	if(inet_aton(ip, &address) == ZERO) {
 		printf("[ERROR]: Failure getting an IP");
-		exit(-1);
+		exit(ABORT);
 	}
 
 	server_addr.sin_addr.s_addr = address.s_addr;
 	
-	//Connect to the server.
-	if(connect(sockfd, (struct sockaddr*) &server_addr, sizeof (server_addr)) != 0){
+	if(connect(sockfd, (struct sockaddr*) &server_addr, sizeof (server_addr)) != ZERO){
 		printf("[ERROR]: Failure connecting to hport");
-		exit(-1);
+		exit(ABORT);
 	}
 
 	return sockfd;
@@ -96,14 +138,15 @@ int asocket(char *ip, int port){
 @return Returns 0 if success
 */
 
-int listenTo(int sockfd, char *str){
+int listen_to(int sockfd, char *str){
 
 	bzero(str, MAX_SIZE);
+	
+	test_receive(sockfd, str);
 
-	if(recv(sockfd, str, MAX_SIZE, 0) < 0)
-		printf("[ERROR]: Socket problem (receiving...) ");
+	printf("%s\n", str);
 
-	printf("String listened: %s\n", str);
+	ftp_valid(str);
 
 	return OK;
 }
@@ -117,7 +160,7 @@ int listenTo(int sockfd, char *str){
 @return Returns 0 if success
 */
 
-int sendTo(int sockfd, char *str, char *code_str, char *value){
+int send_to(int sockfd, char *str, char *code_str, char *value){
 
 	bzero(str, MAX_SIZE);
 
@@ -125,8 +168,26 @@ int sendTo(int sockfd, char *str, char *code_str, char *value){
 	strcat(str, value);
 	strcat(str, "\n");
 	
-	if(send(sockfd, str, strlen(str), 0) < 0)
-		printf("[ERROR]: Socket problem (sending...): ");
+	if(send(sockfd, str, strlen(str), ZERO) < ZERO)
+		printf("[ERROR]: Socket problem (sending...):");
+
+	return OK;
+}
+
+
+/**
+@brief Awaits the response from server with an expected code
+@param sockfd - socket file descriptor
+@param str - string received (from listen_to)
+@param code_str - expected code
+@return Returns 0 when succeeds
+*/
+
+int receive_from(int sockfd, char *str, char *code_str){
+
+
+	for(; !test_response(str, code_str);)
+		listen_to(sockfd, str);	
 
 	return OK;
 }
@@ -138,65 +199,120 @@ int sendTo(int sockfd, char *str, char *code_str, char *value){
 @return Returns 1 if success (code exists) and 0 otherwise
 */
 
-int testResponse(char *str, char *code_str){
-	int i, str_pos = 0;
-	int length = strlen( code_str ), position = 0;	
+int test_response(char *str, char *code_str){
+	int i, str_pos = ZERO;
+	int length = strlen( code_str ), position = ZERO;	
 
 	for(; str_pos != -1;){
-
 		if(str_pos != -1){
-			if(str_pos != 0) str_pos++;
+			if(str_pos != ZERO) str_pos++;
 			
-			for(i = 0; i < length; i++)
+			for(i = ZERO; i < length; i++)
 				if(str[str_pos + i] != code_str[i])
 					break;
 
 			if(length == i) return 1;
 		}
-		str_pos = find(str, '\n', str_pos + 1);
+		str_pos = find_nth(str, NEWLINE, str_pos + 1, 1);
 	}
 	
 	return 0;
 }
 
 /**
-@brief Awaits the response from server with an expected code
-@param sockfd - socket file descriptor
-@param str - string received (from listenTo)
-@param code_str - expected code
-@return Returns 0 when succeeds
-*/
-
-int receiveFrom(int sockfd, char *str, char *code_str){
-
-	for(; !testResponse(str, code_str);)
-		listenTo(sockfd, str);	
-
-	return OK;
-}
-
-/**
 @brief Logins the user (anonymous or not) to the server
 @param sockfd - socket file descriptor
 @param str - string received
-@param data - data retrieved from parser
+@param user - username
+@param password - user's password
 @return Returns 0 if success
 */
 
-int login(int sockfd, char *str, FTP_Data data){
+int login(int sockfd, char *str, char *user, char *password){
 
-	receiveFrom( sockfd, str, CODE_USER );
-	sendTo( sockfd, str, STR_USER, data.user );
+	receive_from( sockfd, str, CODE_USER );
+	send_to( sockfd, str, STR_USER, user );
 
-	receiveFrom( sockfd, str, CODE_PASSWORD );
-	sendTo( sockfd, str, STR_PASSWORD, data.password );
+	receive_from( sockfd, str, CODE_PASSWORD );
+	send_to( sockfd, str, STR_PASSWORD, password );
 
-	receiveFrom( sockfd, str, CODE_USER_LOGGED );
+	receive_from( sockfd, str, CODE_USER_LOGGED );
 
 	return OK;
 
 }
 
+
+/**
+@brief If there is a path, sends the CWD (250) code to server and then waits for response
+@param sockfd - socket file descriptor
+@param str - buffer string
+@param url - url path
+@return Returns OK (0) if success
+*/
+
+int path(int sockfd, char *str, char *url_path){
+	
+	if (strcmp(url_path, BLANK) != ZERO){
+		send_to(sockfd, str, STR_CWD, url_path);
+		receive_from(sockfd, str, CODE_CWD);
+	}	
+	
+	return OK;
+
+}
+
+/**
+@brief Sends the Passive Mode code to server and then awaits for response
+@param sockfd - socket file descriptor
+@param str - buffer string
+@return Returns OK (0) if success
+*/
+
+int passive_mode(int sockfd, char *str){
+	
+	send_to(sockfd, str, STR_PASV, BLANK);
+	receive_from(sockfd, str, CODE_PASV);
+
+	return OK;	
+
+}
+
+/**
+@brief Sends the Size code to server and then awaits for response
+@param sockfd - socket file descriptor
+@param str - buffer string
+@param filename - file name
+@return Returns the filesize
+*/
+
+int file_size(int sockfd, char *str, char *filename){
+
+	int filesize;	
+
+	send_to(sockfd, str, STR_SIZE, filename);
+	receive_from(sockfd, str, CODE_SIZE);
+
+	filesize = atoi(&str[4]);
+	
+	return filesize;
+}
+
+/**
+@brief Sends the Retrieve code to server
+@param sockfd - socket file descriptor
+@param str - buffer string
+@param filename - file name
+@return Returns OK (0) if success
+*/
+
+int retrieve(int sockfd, char *str, char *filename){
+	
+	send_to(sockfd, str, STR_RETR, filename);
+
+	return OK;
+
+}
 
 /**
 @brief Receives the QUIT command to end connection and sends the response
@@ -207,15 +323,141 @@ int login(int sockfd, char *str, FTP_Data data){
 
 int quit(int sockfd, char *str){
 	
-	receiveFrom( sockfd, str, CODE_QUIT );
-	sendTo( sockfd, str, STR_QUIT, BLANK );
+	receive_from( sockfd, str, CODE_QUIT );
+	send_to( sockfd, str, STR_QUIT, BLANK );
 	
-	printf("QUIT\n");	
+	return OK;
+
+}
+
+/**
+@brief Retrieves the file specified
+@param sockfd - socket file descriptor
+@param filename - file name
+@param filesize - file size
+@return Returns OK (0) if success
+*/
+
+int retrieve_file(int sockfd, char *filename, int filesize){
+
+	FILE *file = fopen(filename, "wb");
+
+	int chunk = FILE_CHUNK_SIZE;
+	char *str = malloc(FILE_CHUNK_SIZE + 1);
+		
+	while(filesize > ZERO){
+		if(filesize < FILE_CHUNK_SIZE) chunk = filesize;
+
+		bzero(str, FILE_CHUNK_SIZE);
+
+		test_receive(sockfd, str);
+
+		fwrite(str, ONE, chunk, file);
+
+		filesize = filesize - chunk;
+
+		usleep(FILE_SLEEP);
+	}
+
+	fclose(file);
 
 	return OK;
 
 }
 
+/**
+@brief Initializes the FTP (login, path, passive mode, retrieve and filesize)
+@param sockfd - socket file descriptor
+@param data - data retrieved from parser
+@param retr_port - retrieve port
+@param filesize - file size
+@return Returns OK (0) if success
+*/
+
+int ftp_init(int sockfd, FTP_Data data, int *retr_port, int *filesize){
+
+	char *str = malloc(MAX_SIZE_WITH_NULL);
+
+	login(sockfd, str, data.user, data.password);
+
+	path(sockfd, str, data.url_path);
+
+	passive_mode(sockfd, str);	
+
+	*retr_port = get_port(str);
+	
+	*filesize = file_size(sockfd, str, data.filename);
+
+	return OK;
+
+}
+
+/**
+@brief Begins the file transfer
+@param sockfd - socket file descriptor
+@param ip - internet protocol
+@param retr_port - retrieve port
+@param filename - file name
+@param filesize - file size
+@return Returns OK (0) if success
+*/
+
+int ftp_transfer(int sockfd, char *ip, int retr_port, char *filename, int filesize){
+
+	int pid = fork();
+	char *str = malloc(MAX_SIZE_WITH_NULL);
+	
+	if(!pid){ 
+
+		retrieve(sockfd, str, filename);		
+		sockfd = asocket(ip, retr_port);
+		retrieve_file(sockfd, filename, filesize);
+		
+	} else 
+		quit(sockfd, str);
+
+	return OK;
+
+}
+
+/**
+@brief Quits the FTP application (closes the socket)
+@param sockfd - socket file descriptor
+@return Returns OK (0) if success
+*/
+
+int ftp_quit(int sockfd){
+
+	usleep(FTP_SLEEP);
+	close(sockfd);
+
+	return OK;
+
+}
+
+/**
+@brief Begins the FTP application
+@param data - data retrieved from parser
+*/
+
+int ftp(FTP_Data data){
+
+	char *ip;
+	int sockfd;
+	int retr_port;
+	int filesize;
+
+	ip = getIP(data.host);
+	
+	sockfd = asocket(ip, data.port);
+	
+	ftp_init(sockfd, data, &retr_port, &filesize);
+
+	ftp_transfer(sockfd, ip, retr_port, data.filename, filesize);
+	
+	ftp_quit(sockfd);
+
+}
 
 /*************************************************************************************
 
@@ -226,66 +468,62 @@ int quit(int sockfd, char *str){
 
 
 
-FTP_Data createURL(char* input) {
+FTP_Data parse_data(char* input) {
 	FTP_Data result;
-	if (input == NULL) {
-		printf("[ERROR]: Nothing was indicated");
-		exit(-1);
-	}
 
-	if (strncmp(input, "ftp://", 6) == 0) {
-		
-	} else {
+	if(strncmp(input, "ftp://", 6) != ZERO){
 		printf("[ERROR]: It should start by ftp://" );
-		exit(-1);
+		exit(ABORT);
 	}
 
-	result.user = "anonymous";
-	result.password = "anonymous@anonymous.com";
-	result.port = 21;
+	result.user = USER_ANONYMOUS;
+	result.password = PASSWORD_ANONYMOUS;
+	result.port = FTP_PORT;
 
 	int colon_pos, at_pos = -1, slash_pos, final_slash_pos, tmp_final;
-	colon_pos = find( input, ':', 6 );
-	slash_pos = find( input, '/', 6 );
 
-	if( slash_pos == -1 ){
+	colon_pos = find_nth(input, COLON, 6, 1);
+	slash_pos = find_nth(input, SLASH, 6, 1);
+
+	if(slash_pos == -1){
 		printf("[ERROR]: Check the syntax from FTP again");
-		exit(-1);
+		exit(ABORT);
 	}
 
-	if( colon_pos != -1 ){ 
-		at_pos = find( input, '@', colon_pos+1 );
-		if( at_pos != -1 ){ 
-			result.user = str_copy( input, 6, colon_pos );
-			result.password = str_copy( input, colon_pos+1, at_pos );
-			colon_pos = find( input, ':', at_pos+1 ); 
+	if(colon_pos != -1){ 
+		at_pos = find_nth(input, AT, colon_pos + 1, 1);
+
+		if(at_pos != -1){ 
+			result.user = str_copy(input, 6, colon_pos);
+			result.password = str_copy(input, colon_pos + 1, at_pos);
+			colon_pos = find_nth(input, COLON, at_pos + 1, 1); 
 		}
 		if( colon_pos != -1 ){ 
-			char *port_str = str_copy( input, colon_pos+1, slash_pos );
-			result.port = atoi( port_str );
+			char *port_str = str_copy(input, colon_pos + 1, slash_pos);
+			result.port = atoi(port_str);
 		}
+
 	}
 	
 	
-	if( at_pos == -1 )
-		at_pos = 5;
-	if( colon_pos == -1 )
-		colon_pos = slash_pos;
-	result.host = str_copy( input, at_pos+1, colon_pos );
-	
-	
-	final_slash_pos = slash_pos+1;
-	tmp_final = find( input, '/', final_slash_pos );
-	while( tmp_final != -1 ){
+	if(at_pos == -1) at_pos = 5;
+
+	if(colon_pos == -1) colon_pos = slash_pos;
+
+	result.host = str_copy( input, at_pos + 1, colon_pos );	
+	final_slash_pos = slash_pos + 1;
+	tmp_final = find_nth(input, SLASH, final_slash_pos, 1);
+
+	while(tmp_final != -1){
 		final_slash_pos = tmp_final;
-		tmp_final = find( input, '/', tmp_final+1 );
+		tmp_final = find_nth(input, SLASH, tmp_final + 1, 1);
 	};
-	result.url_path = str_copy( input, slash_pos+1, final_slash_pos );
-	if( final_slash_pos == slash_pos+1 )
-		final_slash_pos--;
-	result.filename = str_copy( input, final_slash_pos+1, strlen(input) );
 
+	result.url_path = str_copy(input, slash_pos + 1, final_slash_pos);
 
+	if(final_slash_pos == slash_pos + 1) final_slash_pos--;
+
+	result.filename = str_copy(input, final_slash_pos + 1, strlen(input));
 
 	return result;
 }
@@ -300,14 +538,14 @@ int get_port( char *buffer ){
 	char *port_str1,
 		 *port_str2;
 
-	port_pos1 = find_nth( buffer, ',', 0, 4 );
-	port_pos2 = find( buffer, ',', port_pos1+1 );
-	port_pos3 = find( buffer, ')', port_pos2+1 );
+	port_pos1 = find_nth(buffer, ',', 0, 4);
+	port_pos2 = find_nth(buffer, ',', port_pos1 + 1, 1);
+	port_pos3 = find_nth(buffer, ')', port_pos2 + 1, 1);
 	
 	port_str1 = str_copy( buffer, port_pos1+1, port_pos2 );
 	port_str2 = str_copy( buffer, port_pos2+1, port_pos3 );
 	
-	port = 256*atoi( port_str1 ) + atoi( port_str2 );
+	port = 256*atoi(port_str1) + atoi(port_str2);
 
 	return port;
 }
@@ -315,62 +553,11 @@ int get_port( char *buffer ){
 
 int main(int argc, char *argv[]) {
 	
-	printf("-------------FTP INIT--------------\n");
-
-	checkArgc(argc);
+	test_args(argc, argv);
 	
-	FTP_Data url = createURL( argv[1] );
+	FTP_Data data = parse_data(argv[1]);
 
-	char *str = malloc(MAX_SIZE + 1);
-	char *ip = getIP( url.host );
-	int sockfd = asocket( ip, url.port );
+	ftp(data);
 
-	login(sockfd, str, url);
-
-	if ( strcmp( url.url_path, BLANK ) != 0 ){
-		sendTo( sockfd, str, STR_CWD, url.url_path );
-		receiveFrom( sockfd, str, CODE_CWD );
-	}
-
-	sendTo( sockfd, str, STR_PASV, BLANK );
-	receiveFrom( sockfd, str, CODE_PASV );
-	int retr_port = get_port( str );
-
-	sendTo( sockfd, str, STR_SIZE, url.filename );
-	receiveFrom( sockfd, str, CODE_SIZE );
-	unsigned int fileSize = atoi( &str[4] );
-	sendTo( sockfd, str, STR_RETR, url.filename );
-
-	usleep( DEFAULT_USLEEP );
-
-	if( !fork() ){ 
-		sockfd = asocket( ip, retr_port );
-		
-		FILE *file = fopen( url.filename, "wb" );
-		unsigned char* fbuffer[ MAX_SIZE+1 ];
-		fbuffer[ MAX_SIZE ] = '\0';
-		int current_chunk = MAX_SIZE;
-		
-		while( fileSize > 0 ){
-
-			if( fileSize < MAX_SIZE )
-				current_chunk = fileSize;
-
-			bzero( fbuffer, MAX_SIZE );
-			if( recv( sockfd, fbuffer, MAX_SIZE, 0 ) < 0 ){
-				printf("Error while receiving socket:");
-			}
-
-			fwrite( fbuffer, sizeof(char), current_chunk, file );
-			fileSize -= current_chunk;
-			usleep( FBUFFER_USLEEP );
-		}
-
-		fclose( file );
-	} else 
-		quit(sockfd, str);
-
-	close(sockfd);
-
-	return 0;
+	return OK;
 }
