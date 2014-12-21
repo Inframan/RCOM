@@ -1,17 +1,26 @@
 #define OK 0
 #define ABORT -1
+#define ERROR -1
+#define NOT_FOUND -1
 
 #define ZERO 0
 #define ONE 1
+#define TWO 2
+#define FOUR 4
+#define FIVE 5
+#define SIX 6
+
+#define TWO_POW_EIGHT 256
 
 #define MAX_SIZE 255
 #define MAX_SIZE_WITH_NULL 256
 
-#define FILE_CHUNK_SIZE 255
+#define FILE_DATA_SIZE 255
 #define FTP_SLEEP 200000
 #define FILE_SLEEP 150000
 
 #define FTP_PORT 21
+#define FTP_START "ftp://"
 
 #define STR_USER "USER "
 #define STR_PASSWORD "PASS "
@@ -33,11 +42,16 @@
 #define USER_ANONYMOUS "anonymous"
 #define PASSWORD_ANONYMOUS "anonymous"
 
+#define COMMA ','
+#define RIGHT_PARENTHESIS ')'
 #define SLASH '/'
 #define AT '@'
 #define COLON ':'
 #define NEWLINE '\n'
 #define NULL_CHAR '\0'
+#define NEWLINE_STRING "\n"
 
 #define FTP_CODE_NO_FILE "550"
 #define FTP_CODE_WRONG_CREDENTIALS "430"
+
+#define WRITE_BINARY "wb"

@@ -1,25 +1,41 @@
-int find_nth(char* str, char c, int start_pos, int nth){
+/**
+@brief Finds the nth element of a string
+@param str - string
+@param c - character
+@param start - starting position
+@param nth - nth position of character
+@return Returns the position or NOT_FOUND (-1) otherwise
+*/
 
-	if(start_pos >= strlen(str)) return -1;
+int find_nth(char *str, char c, int start, int nth){
 
-	for(; str[start_pos]!='\0'; start_pos++){
-		if(str[start_pos] == c){
-			if(nth == 1)
-				return start_pos;
-			else
-				nth--;
+	if(start >= strlen(str)) return NOT_FOUND;
+
+	for(; str[start] != NULL_CHAR; start++){
+		if(str[start] == c){
+			if(nth == ONE) return start;
+			else nth--;
 		}
 	}
-	return -1;
+
+	return NOT_FOUND;
 }
 
-char *str_copy(char* str, int start, int end){
+/**
+@brief Copies a string orig to dest, from start to end
+@param orig - origin string
+@param start - starting position
+@param end - ending position
+@return Returns the destination string
+*/
+
+char* str_copy(char *orig, int start, int end){
 
 	int length = end - start;
-	char *ret = malloc( length + 1 );
+	char *dest = malloc(length + ONE);
 
-	memcpy(ret, &str[start], length);
-	ret[length] = '\0';
+	memcpy(dest, &orig[start], length);
+	dest[length] = NULL_CHAR;
 
-	return ret;
+	return dest;
 }

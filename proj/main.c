@@ -59,11 +59,14 @@ int test_receive(int sockfd, char *str){
 
 int test_args(int argc, char *argv[]){
 
-	if (argc != 2) {
+	if (argc != TWO) {
 		printf("Program: ./download ftp://[<user>:<password>@]<host>[:port]/<url-path>\n");
 		exit(ABORT);
-	} else if(argv[1] == NULL){
-		printf("[ERROR]: Nothing was indicated");
+	} else if(argv[ONE] == NULL){
+		printf("[ERROR]: Nothing was indicated\n");
+		exit(ABORT);
+	} else if(strncmp(argv[ONE], FTP_START, SIX) != ZERO){
+		printf("[ERROR]: It should start by ftp://\n");
 		exit(ABORT);
 	}
 
@@ -112,19 +115,19 @@ int asocket(char *ip, int port){
         server_addr.sin_port = htons(port);                /*server TCP port must be network byte ordered */
 
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, ZERO)) < ZERO){
-		printf("[ERROR]: Socket could not be created");
+		printf("[ERROR]: Socket could not be created\n");
 		exit(ABORT);
 	}
 	
 	if(inet_aton(ip, &address) == ZERO) {
-		printf("[ERROR]: Failure getting an IP");
+		printf("[ERROR]: Failure getting an IP\n");
 		exit(ABORT);
 	}
 
 	server_addr.sin_addr.s_addr = address.s_addr;
 	
 	if(connect(sockfd, (struct sockaddr*) &server_addr, sizeof (server_addr)) != ZERO){
-		printf("[ERROR]: Failure connecting to hport");
+		printf("[ERROR]: Failure connecting to hport\n");
 		exit(ABORT);
 	}
 
@@ -166,7 +169,7 @@ int send_to(int sockfd, char *str, char *code_str, char *value){
 
 	strcpy(str, code_str);
 	strcat(str, value);
-	strcat(str, "\n");
+	strcat(str, NEWLINE_STRING);
 	
 	if(send(sockfd, str, strlen(str), ZERO) < ZERO)
 		printf("[ERROR]: Socket problem (sending...):");
@@ -196,27 +199,27 @@ int receive_from(int sockfd, char *str, char *code_str){
 @brief Checks if the message has the expected code
 @param str - string received (message)
 @param code_str - expected code
-@return Returns 1 if success (code exists) and 0 otherwise
+@return Returns ONE (1 -> true) if success (code exists) and 0 (false) otherwise
 */
 
 int test_response(char *str, char *code_str){
 	int i, str_pos = ZERO;
-	int length = strlen( code_str ), position = ZERO;	
+	int length = strlen(code_str), position = ZERO;	
 
-	for(; str_pos != -1;){
-		if(str_pos != -1){
+	for(; str_pos != ERROR;){
+		if(str_pos != ERROR){
 			if(str_pos != ZERO) str_pos++;
 			
 			for(i = ZERO; i < length; i++)
 				if(str[str_pos + i] != code_str[i])
 					break;
 
-			if(length == i) return 1;
+			if(length == i) return ONE;
 		}
-		str_pos = find_nth(str, NEWLINE, str_pos + 1, 1);
+		str_pos = find_nth(str, NEWLINE, str_pos + ONE, ONE);
 	}
 	
-	return 0;
+	return ZERO;
 }
 
 /**
@@ -230,13 +233,13 @@ int test_response(char *str, char *code_str){
 
 int login(int sockfd, char *str, char *user, char *password){
 
-	receive_from( sockfd, str, CODE_USER );
-	send_to( sockfd, str, STR_USER, user );
+	receive_from(sockfd, str, CODE_USER);
+	send_to(sockfd, str, STR_USER, user);
 
-	receive_from( sockfd, str, CODE_PASSWORD );
-	send_to( sockfd, str, STR_PASSWORD, password );
+	receive_from(sockfd, str, CODE_PASSWORD);
+	send_to(sockfd, str, STR_PASSWORD, password);
 
-	receive_from( sockfd, str, CODE_USER_LOGGED );
+	receive_from(sockfd, str, CODE_USER_LOGGED);
 
 	return OK;
 
@@ -279,23 +282,43 @@ int passive_mode(int sockfd, char *str){
 }
 
 /**
+@brief Saves the port
+@param str - string in the format (%d, %d, %d, %d, %d, %d)
+@param port - port
+@return Returns OK (0) if success
+*/
+
+int port(char *str, int *port){
+	
+	int pos1, pos2, pos3;
+	char *buffer = malloc(MAX_SIZE_WITH_NULL);
+
+	pos1 = find_nth(str, COMMA, ZERO, FOUR);
+	pos2 = find_nth(str, COMMA, pos1 + ONE, ONE);
+	pos3 = find_nth(str, RIGHT_PARENTHESIS, pos2 + ONE, ONE);	
+	
+	*port = TWO_POW_EIGHT*atoi(strncpy(buffer, str + pos1 + ONE, pos2)) + atoi(strncpy(buffer, str + pos2 + ONE, pos3));
+
+	return OK;
+}
+
+/**
 @brief Sends the Size code to server and then awaits for response
 @param sockfd - socket file descriptor
 @param str - buffer string
 @param filename - file name
-@return Returns the filesize
+@param filesize - file size
+@return Returns OK (0) if success
 */
 
-int file_size(int sockfd, char *str, char *filename){
-
-	int filesize;	
+int file_size(int sockfd, char *str, char *filename, int *filesize){
 
 	send_to(sockfd, str, STR_SIZE, filename);
 	receive_from(sockfd, str, CODE_SIZE);
 
-	filesize = atoi(&str[4]);
+	*filesize = atoi(&str[FOUR]);
 	
-	return filesize;
+	return OK;
 }
 
 /**
@@ -323,8 +346,8 @@ int retrieve(int sockfd, char *str, char *filename){
 
 int quit(int sockfd, char *str){
 	
-	receive_from( sockfd, str, CODE_QUIT );
-	send_to( sockfd, str, STR_QUIT, BLANK );
+	receive_from(sockfd, str, CODE_QUIT);
+	send_to(sockfd, str, STR_QUIT, BLANK);
 	
 	return OK;
 
@@ -340,21 +363,21 @@ int quit(int sockfd, char *str){
 
 int retrieve_file(int sockfd, char *filename, int filesize){
 
-	FILE *file = fopen(filename, "wb");
+	FILE *file = fopen(filename, WRITE_BINARY);
 
-	int chunk = FILE_CHUNK_SIZE;
-	char *str = malloc(FILE_CHUNK_SIZE + 1);
+	int data_size = FILE_DATA_SIZE;
+	char *str = malloc(FILE_DATA_SIZE + ONE);
 		
 	while(filesize > ZERO){
-		if(filesize < FILE_CHUNK_SIZE) chunk = filesize;
+		if(filesize < FILE_DATA_SIZE) data_size = filesize;
 
-		bzero(str, FILE_CHUNK_SIZE);
+		bzero(str, FILE_DATA_SIZE);
 
 		test_receive(sockfd, str);
 
-		fwrite(str, ONE, chunk, file);
+		fwrite(str, ONE, data_size, file);
 
-		filesize = filesize - chunk;
+		filesize = filesize - data_size;
 
 		usleep(FILE_SLEEP);
 	}
@@ -384,9 +407,9 @@ int ftp_init(int sockfd, FTP_Data data, int *retr_port, int *filesize){
 
 	passive_mode(sockfd, str);	
 
-	*retr_port = get_port(str);
+	port(str, retr_port);
 	
-	*filesize = file_size(sockfd, str, data.filename);
+	file_size(sockfd, str, data.filename, filesize);
 
 	return OK;
 
@@ -459,103 +482,14 @@ int ftp(FTP_Data data){
 
 }
 
-/*************************************************************************************
-
-				NEEDS TO BE CHANGED
-
-
-*************************************************************************************/
-
-
-
-FTP_Data parse_data(char* input) {
-	FTP_Data result;
-
-	if(strncmp(input, "ftp://", 6) != ZERO){
-		printf("[ERROR]: It should start by ftp://" );
-		exit(ABORT);
-	}
-
-	result.user = USER_ANONYMOUS;
-	result.password = PASSWORD_ANONYMOUS;
-	result.port = FTP_PORT;
-
-	int colon_pos, at_pos = -1, slash_pos, final_slash_pos, tmp_final;
-
-	colon_pos = find_nth(input, COLON, 6, 1);
-	slash_pos = find_nth(input, SLASH, 6, 1);
-
-	if(slash_pos == -1){
-		printf("[ERROR]: Check the syntax from FTP again");
-		exit(ABORT);
-	}
-
-	if(colon_pos != -1){ 
-		at_pos = find_nth(input, AT, colon_pos + 1, 1);
-
-		if(at_pos != -1){ 
-			result.user = str_copy(input, 6, colon_pos);
-			result.password = str_copy(input, colon_pos + 1, at_pos);
-			colon_pos = find_nth(input, COLON, at_pos + 1, 1); 
-		}
-		if( colon_pos != -1 ){ 
-			char *port_str = str_copy(input, colon_pos + 1, slash_pos);
-			result.port = atoi(port_str);
-		}
-
-	}
-	
-	
-	if(at_pos == -1) at_pos = 5;
-
-	if(colon_pos == -1) colon_pos = slash_pos;
-
-	result.host = str_copy( input, at_pos + 1, colon_pos );	
-	final_slash_pos = slash_pos + 1;
-	tmp_final = find_nth(input, SLASH, final_slash_pos, 1);
-
-	while(tmp_final != -1){
-		final_slash_pos = tmp_final;
-		tmp_final = find_nth(input, SLASH, tmp_final + 1, 1);
-	};
-
-	result.url_path = str_copy(input, slash_pos + 1, final_slash_pos);
-
-	if(final_slash_pos == slash_pos + 1) final_slash_pos--;
-
-	result.filename = str_copy(input, final_slash_pos + 1, strlen(input));
-
-	return result;
-}
-
-
-int get_port( char *buffer ){
-	
-	int port,
-		port_pos1,
-		port_pos2,
-		port_pos3;
-	char *port_str1,
-		 *port_str2;
-
-	port_pos1 = find_nth(buffer, ',', 0, 4);
-	port_pos2 = find_nth(buffer, ',', port_pos1 + 1, 1);
-	port_pos3 = find_nth(buffer, ')', port_pos2 + 1, 1);
-	
-	port_str1 = str_copy( buffer, port_pos1+1, port_pos2 );
-	port_str2 = str_copy( buffer, port_pos2+1, port_pos3 );
-	
-	port = 256*atoi(port_str1) + atoi(port_str2);
-
-	return port;
-}
-
 
 int main(int argc, char *argv[]) {
 	
 	test_args(argc, argv);
 	
-	FTP_Data data = parse_data(argv[1]);
+	FTP_Data data;
+
+	parse_data(argv[ONE], &data);
 
 	ftp(data);
 
